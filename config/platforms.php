@@ -95,11 +95,20 @@ return [
     | API calls, split into lanes by StoreApiGateway so bulk readers
     | never starve interactive calls.
     |
+    | lanes: share of the per-minute budget each lane may spend.
+    | `realtime` is the default (orders, stock, shipments, settlements);
+    | `background` is for bulk catalog work and additionally yields when
+    | the last observed rate-limit headroom drops below 40%.
+    |
     */
     'api' => [
         'rate_limits' => [
             'salla' => 120,
             'zid' => 60,
+        ],
+        'lanes' => [
+            'realtime' => 0.90,
+            'background' => 0.30,
         ],
     ],
 

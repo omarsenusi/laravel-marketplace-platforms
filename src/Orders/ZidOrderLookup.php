@@ -24,7 +24,7 @@ final class ZidOrderLookup
         $result = $this->gateway->get(
             $connection, '/managers/store/orders',
             ['search_term' => $orderNumber, 'page' => 1, 'per_page' => 10],
-            'chat', 0, ['Accept-Language' => 'ar'],
+            'realtime', 0, ['Accept-Language' => 'ar'],
         );
 
         if ($result->deferred || ! $result->ok || ! is_array($result->json)) {

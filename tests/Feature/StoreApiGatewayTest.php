@@ -54,8 +54,8 @@ test('gateway caches successful responses when cacheSeconds is set', function ()
 
     $gateway = app(StoreApiGateway::class);
 
-    $first = $gateway->get($connection, '/products', ['page' => 1], 'chat', 60);
-    $second = $gateway->get($connection, '/products', ['page' => 1], 'chat', 60);
+    $first = $gateway->get($connection, '/products', ['page' => 1], 'realtime', 60);
+    $second = $gateway->get($connection, '/products', ['page' => 1], 'realtime', 60);
 
     expect($first->ok)->toBeTrue()->and($second->ok)->toBeTrue();
 
@@ -63,7 +63,7 @@ test('gateway caches successful responses when cacheSeconds is set', function ()
     Http::assertSentCount(1);
 });
 
-test('sync lane defers once 30 percent of the budget is used', function () {
+test('background lane defers once 30 percent of the budget is used', function () {
     config(['platforms.api.rate_limits.salla' => 10]);
 
     $connection = gatewayConnection('store-gw-4');
@@ -71,12 +71,12 @@ test('sync lane defers once 30 percent of the budget is used', function () {
 
     $gateway = app(StoreApiGateway::class);
 
-    // 30% of 10 = 3 requests allowed for the sync lane.
-    expect($gateway->get($connection, '/a', [], 'sync')->ok)->toBeTrue();
-    expect($gateway->get($connection, '/b', [], 'sync')->ok)->toBeTrue();
-    expect($gateway->get($connection, '/c', [], 'sync')->ok)->toBeTrue();
+    // 30% of 10 = 3 requests allowed for the background lane.
+    expect($gateway->get($connection, '/a', [], 'background')->ok)->toBeTrue();
+    expect($gateway->get($connection, '/b', [], 'background')->ok)->toBeTrue();
+    expect($gateway->get($connection, '/c', [], 'background')->ok)->toBeTrue();
 
-    $deferred = $gateway->get($connection, '/d', [], 'sync');
+    $deferred = $gateway->get($connection, '/d', [], 'background');
 
     expect($deferred->deferred)->toBeTrue()
         ->and($deferred->ok)->toBeFalse()
@@ -85,12 +85,12 @@ test('sync lane defers once 30 percent of the budget is used', function () {
     // The deferred call made no HTTP request.
     Http::assertSentCount(3);
 
-    // The chat lane has its own budget and still works.
-    expect($gateway->get($connection, '/e', [], 'chat')->ok)->toBeTrue();
+    // The realtime lane has its own budget and still works.
+    expect($gateway->get($connection, '/e', [], 'realtime')->ok)->toBeTrue();
     Http::assertSentCount(4);
 });
 
-test('sync lane defers when headroom remaining is below 40 percent', function () {
+test('background lane defers when headroom remaining is below 40 percent', function () {
     $connection = gatewayConnection('store-gw-5');
 
     // Record low headroom via a chat call (10/100 remaining).
@@ -100,9 +100,9 @@ test('sync lane defers when headroom remaining is below 40 percent', function ()
     ]);
 
     $gateway = app(StoreApiGateway::class);
-    expect($gateway->get($connection, '/products', [], 'chat')->ok)->toBeTrue();
+    expect($gateway->get($connection, '/products', [], 'realtime')->ok)->toBeTrue();
 
-    $deferred = $gateway->get($connection, '/products', [], 'sync');
+    $deferred = $gateway->get($connection, '/products', [], 'background');
 
     expect($deferred->deferred)->toBeTrue();
 
@@ -121,7 +121,7 @@ test('a 429 opens the breaker and the next call makes no http request', function
     $first = $gateway->get($connection, '/products');
     expect($first->deferred)->toBeTrue();
 
-    // Chat lane fails fast: no in-request Retry-After sleep/retry.
+    // Realtime lane fails fast: no in-request Retry-After sleep/retry.
     Http::assertSentCount(1);
 
     $countAfterFirst = count(Http::recorded());
@@ -172,12 +172,12 @@ test('a cached answer is served even while the breaker is open', function () {
     gatewayRefake(200, ['data' => [['id' => 1]]]);
 
     $gateway = app(StoreApiGateway::class);
-    expect($gateway->get($connection, '/products', [], 'chat', 60)->ok)->toBeTrue();
+    expect($gateway->get($connection, '/products', [], 'realtime', 60)->ok)->toBeTrue();
 
     Cache::put("platforms:api:{$connection->id}:breaker", time() + 60, 60);
     $before = count(Http::recorded());
 
-    $again = $gateway->get($connection, '/products', [], 'chat', 60);
+    $again = $gateway->get($connection, '/products', [], 'realtime', 60);
     expect($again->ok)->toBeTrue()
         ->and(count(Http::recorded()))->toBe($before);
 });
@@ -186,7 +186,7 @@ test('extra headers are sent', function () {
     $connection = gatewayConnection('store-gw-headers');
     gatewayRefake(200, ['data' => []]);
 
-    app(StoreApiGateway::class)->get($connection, '/products', [], 'sync', 0, ['Store-Id' => 'abc']);
+    app(StoreApiGateway::class)->get($connection, '/products', [], 'background', 0, ['Store-Id' => 'abc']);
 
     Http::assertSent(fn ($request) => $request->hasHeader('Store-Id', 'abc'));
 });

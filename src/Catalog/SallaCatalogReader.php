@@ -64,7 +64,7 @@ final class SallaCatalogReader implements CatalogReader
         try {
             $result = $this->gateway->get(
                 $connection, '/products/'.rawurlencode(trim($id)),
-                [], $lane, $lane === 'chat' ? 60 : 0,
+                [], $lane, $lane === 'realtime' ? 60 : 0,
             );
         } catch (Throwable) {
             return null;
@@ -109,7 +109,7 @@ final class SallaCatalogReader implements CatalogReader
             $result = $this->gateway->get(
                 $connection, '/products',
                 ['page' => 1, 'per_page' => 50, 'keyword' => $query],
-                $lane, $lane === 'chat' ? 60 : 0,
+                $lane, $lane === 'realtime' ? 60 : 0,
             );
         } catch (Throwable) {
             return CatalogPage::failed('transport_error');

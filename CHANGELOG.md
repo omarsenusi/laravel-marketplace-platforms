@@ -22,4 +22,12 @@ All notable changes to this project will be documented in this file.
   `PlatformWebhookReceived`).
 - Catalog and order readers (`CatalogReader(s)`, Salla/Zid readers,
   `OrderLookup`, Salla/Zid lookups) behind the per-store
-  `StoreApiGateway` rate limiter.
+  `StoreApiGateway` rate limiter (lanes `realtime`/`background`,
+  shares under `platforms.api.lanes`).
+- Commerce write capabilities (`src/Commerce`): `ProductWriter`,
+  `InventoryWriter`, `ShipmentWriter`, `SettlementGateway`,
+  `OrderWriter`, `ShippingSetup`, `CategoryWriter`,
+  `TransactionWriter` and `CouponWriter` with Salla implementations,
+  per-driver registries, minor-unit money DTOs, single-flight 401
+  refresh and no write auto-retries; results carry Salla error codes,
+  validation fields and pacing headers.

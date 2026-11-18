@@ -56,7 +56,7 @@ final class ZidCatalogReader implements CatalogReader
         try {
             $result = $this->gateway->get(
                 $connection, '/products/'.rawurlencode(trim($id)).'/',
-                [], $lane, $lane === 'chat' ? 60 : 0, $this->headers($connection),
+                [], $lane, $lane === 'realtime' ? 60 : 0, $this->headers($connection),
             );
         } catch (Throwable) {
             return null;
@@ -101,7 +101,7 @@ final class ZidCatalogReader implements CatalogReader
             $result = $this->gateway->get(
                 $connection, '/products/',
                 ['page' => 1, 'page_size' => 50, 'search' => $query],
-                $lane, $lane === 'chat' ? 60 : 0, $this->headers($connection),
+                $lane, $lane === 'realtime' ? 60 : 0, $this->headers($connection),
             );
         } catch (Throwable) {
             return CatalogPage::failed('transport_error');

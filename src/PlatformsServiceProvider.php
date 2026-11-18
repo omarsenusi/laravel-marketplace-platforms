@@ -9,6 +9,15 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Omarsenusi\MarketplacePlatforms\Api\StoreApiGateway;
 use Omarsenusi\MarketplacePlatforms\Billing\NullSubscriptionApplier;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaCategoryWriter;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaCouponWriter;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaInventoryWriter;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaOrderWriter;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaProductWriter;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaSettlementGateway;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaShipmentWriter;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaShippingSetup;
+use Omarsenusi\MarketplacePlatforms\Commerce\SallaTransactionWriter;
 use Omarsenusi\MarketplacePlatforms\Console\PurgeWebhookDeliveries;
 use Omarsenusi\MarketplacePlatforms\Console\RefreshDueTokens;
 use Omarsenusi\MarketplacePlatforms\Console\SendClaimReminders;
@@ -104,6 +113,19 @@ class PlatformsServiceProvider extends ServiceProvider
         $this->app->singleton(WebhookDeliveryService::class, fn (): WebhookDeliveryService => new WebhookDeliveryService);
 
         $this->app->singleton(StoreApiGateway::class);
+
+        // Commerce write capabilities (Salla implementations behind the
+        // per-driver registries in src/Commerce; Zid resolves to
+        // UnsupportedOperation). Each is stateless over the gateway.
+        $this->app->singleton(SallaProductWriter::class);
+        $this->app->singleton(SallaInventoryWriter::class);
+        $this->app->singleton(SallaShipmentWriter::class);
+        $this->app->singleton(SallaSettlementGateway::class);
+        $this->app->singleton(SallaOrderWriter::class);
+        $this->app->singleton(SallaShippingSetup::class);
+        $this->app->singleton(SallaCategoryWriter::class);
+        $this->app->singleton(SallaTransactionWriter::class);
+        $this->app->singleton(SallaCouponWriter::class);
 
         // Host subscription handling. The default only records the
         // snapshot; bind your own implementation to change host plans.

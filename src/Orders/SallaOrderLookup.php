@@ -8,7 +8,7 @@ use Omarsenusi\MarketplacePlatforms\Models\PlatformConnection;
 /**
  * Salla order lookup (base https://api.salla.dev/admin/v2).
  *
- * GET /orders?reference_id={n} (chat lane, no cache) → data[] rows with
+ * GET /orders?reference_id={n} (realtime lane, no cache) → data[] rows with
  * id, reference_id, urls{customer}, total{amount,currency}, date{date},
  * status{name,slug,customized{name}}, customer{mobile,mobile_code,email},
  * items[{name,quantity}]. Then GET /shipments?order_id={id} → data[] with
@@ -25,7 +25,7 @@ final class SallaOrderLookup
         $result = $this->gateway->get(
             $connection, '/orders',
             ['reference_id' => $orderNumber],
-            'chat',
+            'realtime',
         );
 
         if ($result->deferred || ! $result->ok || ! is_array($result->json)) {
@@ -114,7 +114,7 @@ final class SallaOrderLookup
             $result = $this->gateway->get(
                 $connection, '/shipments',
                 ['order_id' => $orderId],
-                'chat',
+                'realtime',
             );
         } catch (\Throwable) {
             return [];

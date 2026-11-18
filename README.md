@@ -34,6 +34,11 @@ catalog and order readers.
 - **Catalog and order readers** (`CatalogReader(s)`, Salla/Zid catalog
   readers, `OrderLookup`, Salla/Zid order lookups) behind the
   per-store `StoreApiGateway` rate limiter.
+- **Commerce writers** (`src/Commerce`): typed Salla write
+  capabilities — products, inventory, shipments, instant settlements,
+  order statuses, shipping setup, categories, transactions, coupons —
+  behind the same gateway with single-flight 401 refresh and no write
+  auto-retries.
 
 ## Install
 
@@ -136,6 +141,142 @@ app(WebhookHandlerRegistry::class)->register(
 The defaults cover Salla `app.store.authorize`, `app.installed`,
 `app.uninstalled`, `app.updated`, subscription/trial events, and Zid
 install/authorized/uninstall plus subscription events.
+
+## Writing to stores
+
+The `src/Commerce` capabilities push data into Salla stores through the
+single outbound path (`StoreApiGateway`). One interface per capability,
+one Salla implementation each, resolved by driver:
+
+```php
+use Omarsenusi\MarketplacePlatforms\Commerce\ProductWriters;
+use Omarsenusi\MarketplacePlatforms\Commerce\Money;
+
+$writer = ProductWriters::for($connection); // Salla impl; Zid throws UnsupportedOperation
+
+$result = $writer->create($connection, new ProductInput(
+    name: 'T-Shirt Blue',
+    price: new Money(9633, 'SAR'), // halalas; sent as 96.33
+    productType: 'product',
+    quantity: 4,
+    categoryIds: [$platformCategoryId],
+));
+
+if (! $result->ok) {
+    // $result->status, $result->errorCode, $result->fields (422 details)
+}
+```
+
+**Money convention.** Every DTO carries money as integer minor units
+(halalas) plus an ISO currency (`Money{amountMinor, currency}`). The
+Salla implementation converts to decimal amounts (2 dp) at the HTTP
+edge and parses `{amount, currency}` back on read. Never pass floats.
+
+**No auto-retry for writes.** `POST`/`PUT`/`PATCH`/`DELETE` are not
+assumed idempotent: a 5xx/429 is returned as a failure (status, error
+code, validation `fields`, pacing headers) and the caller decides. The
+only automatic retry is a single token refresh + one retry on 401.
+
+More examples:
+
+```php
+use Omarsenusi\MarketplacePlatforms\Commerce\InventoryWriters;
+use Omarsenusi\MarketplacePlatforms\Commerce\StockAdjustment;
+use Omarsenusi\MarketplacePlatforms\Commerce\StockIdentifierType;
+use Omarsenusi\MarketplacePlatforms\Commerce\StockMode;
+
+// Stock sync across many stores (chunked; Salla queues the update).
+// Pass the mode explicitly: increment/decrement deltas are
+// concurrency-safe, overwrite only for an initial load. On a partial
+// failure the result still carries a report — retry only its pending
+// adjustments, never the whole list.
+InventoryWriters::for($connection)->adjust($connection, [
+    new StockAdjustment(StockIdentifierType::Sku, 'TSH-1', 5, StockMode::Decrement),
+]);
+
+// Shipment for an order.
+use Omarsenusi\MarketplacePlatforms\Commerce\NationalAddress;
+use Omarsenusi\MarketplacePlatforms\Commerce\ShipFromBranch;
+use Omarsenusi\MarketplacePlatforms\Commerce\ShipmentInput;
+use Omarsenusi\MarketplacePlatforms\Commerce\ShipmentPaymentMethod;
+use Omarsenusi\MarketplacePlatforms\Commerce\ShipmentPackage;
+use Omarsenusi\MarketplacePlatforms\Commerce\ShipmentType;
+use Omarsenusi\MarketplacePlatforms\Commerce\ShipmentWriters;
+
+ShipmentWriters::for($connection)->create($connection, new ShipmentInput(
+    orderId: 560695738, courierId: 814202285,
+    type: ShipmentType::Shipment, paymentMethod: ShipmentPaymentMethod::Cod,
+    packages: [new ShipmentPackage(name: 'T-Shirt', quantity: 2)],
+    shipFrom: new ShipFromBranch($branchId), shipTo: $nationalAddress,
+));
+
+// Hold funds for a dropshipping order (dropshipping-approved apps only).
+use Omarsenusi\MarketplacePlatforms\Commerce\SettlementGateways;
+
+SettlementGateways::for($connection)->create($connection, $orderReferenceId, new Money(15335, 'SAR'));
+
+// Move an order to a status (slug or numeric status id).
+use Omarsenusi\MarketplacePlatforms\Commerce\OrderWriters;
+
+OrderWriters::for($connection)->updateStatus($connection, $orderId, slug: 'delivering');
+
+// Reconciliation polling (from/to filter by creation date; sorted by update).
+OrderWriters::for($connection)->listSince($connection, now()->subDay(), page: 1);
+
+// Custom shipping company + zone for the platform catalog.
+use Omarsenusi\MarketplacePlatforms\Commerce\ShippingSetups;
+use Omarsenusi\MarketplacePlatforms\Commerce\ZoneCashOnDelivery;
+use Omarsenusi\MarketplacePlatforms\Commerce\ZoneFee;
+use Omarsenusi\MarketplacePlatforms\Commerce\ZoneFeeType;
+use Omarsenusi\MarketplacePlatforms\Commerce\ZoneInput;
+
+$company = ShippingSetups::for($connection)->createCompany($connection, 'Platform Logistics');
+ShippingSetups::for($connection)->createZone($connection, (int) $company->data->id, new ZoneInput(
+    fees: new ZoneFee(ZoneFeeType::Rate, 1100),
+    duration: '3-5',
+    cashOnDelivery: new ZoneCashOnDelivery(true, 1200),
+));
+
+// Hidden platform-products category.
+use Omarsenusi\MarketplacePlatforms\Commerce\CategoryInput;
+use Omarsenusi\MarketplacePlatforms\Commerce\CategoryStatus;
+use Omarsenusi\MarketplacePlatforms\Commerce\CategoryWriters;
+
+CategoryWriters::for($connection)->create($connection, new CategoryInput(
+    name: 'Platform products', status: CategoryStatus::Hidden,
+));
+
+// Partial refund of a transaction.
+use Omarsenusi\MarketplacePlatforms\Commerce\TransactionAction;
+use Omarsenusi\MarketplacePlatforms\Commerce\TransactionWriters;
+
+TransactionWriters::for($connection)->update(
+    $connection, $transactionId, TransactionAction::Refund, new Money(9000, 'SAR')
+);
+
+// Single-use coupon for one customer.
+use Omarsenusi\MarketplacePlatforms\Commerce\CouponInput;
+use Omarsenusi\MarketplacePlatforms\Commerce\CouponType;
+use Omarsenusi\MarketplacePlatforms\Commerce\CouponWriters;
+
+CouponWriters::for($connection)->createSingleUse($connection, new CouponInput(
+    code: 'WELCOME10', type: CouponType::Fixed, customerIds: [$customerId], amountMinor: 1000,
+));
+```
+
+### OAuth scopes
+
+| Capability | Read scope | Write scope |
+| ---------- | ---------- | ----------- |
+| `ProductWriter` | `products.read` (quantities read) | `products.read_write` |
+| `InventoryWriter` | `products.read` | `products.read_write` |
+| `ShipmentWriter` | `shipping.read` | `shipping.read_write` |
+| `SettlementGateway` | `settlements.read` | `settlements.read_write` (dropshipping-approved apps only) |
+| `OrderWriter` | `orders.read` | `orders.read_write` |
+| `ShippingSetup` | `shipping.read` | `shipping.read_write` (routes need Salla approval) |
+| `CategoryWriter` | `categories.read` | `categories.read_write` |
+| `TransactionWriter` | `transactions.read` | `transactions.read_write` |
+| `CouponWriter` | — | `marketing.read_write` |
 
 ## Routes
 

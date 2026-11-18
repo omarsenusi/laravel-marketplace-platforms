@@ -9,8 +9,8 @@ use Omarsenusi\MarketplacePlatforms\Models\PlatformConnection;
  *
  * Never throws for HTTP failures — find() returns null on miss and
  * page()/search() return deferred/failed pages the caller handles.
- * The $lane is passed through to the gateway ('chat' fails fast for
- * live visitor turns, 'sync' for background indexing).
+ * The $lane is passed through to the gateway ('realtime' fails fast for
+ * live visitor turns, 'background' for background indexing).
  */
 interface CatalogReader
 {
