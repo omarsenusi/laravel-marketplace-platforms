@@ -1,0 +1,48 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        // Host stand-ins for tests. The package migrations reference
+        // these tables through platforms.tables.* (users: bigint id,
+        // workspaces: uuid id) and must run after they exist — hence
+        // the 000000 prefix.
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('password')->nullable();
+            $table->string('phone', 32)->nullable();
+            $table->string('locale', 8)->nullable();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->uuid('default_workspace_id')->nullable();
+            $table->rememberToken();
+            $table->timestamps();
+        });
+
+        Schema::create('workspaces', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name');
+            $table->unsignedBigInteger('owner_user_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('password_reset_tokens', function (Blueprint $table) {
+            $table->string('email')->primary();
+            $table->string('token');
+            $table->timestamp('created_at')->nullable();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('workspaces');
+        Schema::dropIfExists('users');
+    }
+};

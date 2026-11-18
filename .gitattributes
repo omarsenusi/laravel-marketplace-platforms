@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+/tests/Fixtures export-ignore
+/.github export-ignore

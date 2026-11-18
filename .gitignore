@@ -1,0 +1,9 @@
+/vendor/
+/composer.lock
+/.phpunit.cache/
+/.phpunit.result.cache
+auth.json
+.env
+.env.*
+!.env.example
+*.stackdump
